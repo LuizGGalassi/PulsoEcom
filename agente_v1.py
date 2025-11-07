@@ -119,34 +119,40 @@ def gerar_insight_acionavel(titulo_artigo: str, resumo_artigo: str) -> str:
 
 # --- MÓDULO 3: O PUBLICADOR (Atualizado) ---
 
-def salvar_post_jekyll(insight_completo: str) -> bool: # Retorna True/False
+# --- MÓDULO 3: O PUBLICADOR (Salva o Post) ---
+
+def salvar_post_jekyll(insight_completo: str):
     """
     Pega o insight gerado pela IA, formata-o como um post
     Jekyll e o salva como um arquivo .md.
     """
     print("Iniciando Módulo 3: Publicador Estático...")
+
     try:
+        # 1. Separar o Título do Corpo
         partes = insight_completo.split('\n\n', 1)
         if len(partes) < 2:
             print("Erro: Insight da IA não está no formato Título/Corpo esperado.")
-            return False
+            return
 
         titulo_raw = partes[0]
         corpo = partes[1].strip()
+
+        # Limpa o título (remove os ** do Markdown)
         titulo_limpo = titulo_raw.replace("**", "").strip()
 
+        # 2. Preparar o Nome do Arquivo (Formato Jekyll)
         hoje_str = datetime.now().strftime('%Y-%m-%d')
-        
         slug = titulo_limpo.lower().replace(' ', '-')
         slug = "".join(c for c in slug if c.isalnum() or c in ['-']) 
-        
-        # Garante que o slug não seja muito longo (bom para nomes de arquivo)
-        slug = slug[:60] 
-        
+
         nome_arquivo = f"{hoje_str}-{slug}.md"
-        
-        # --- MUDANÇA (CORREÇÃO DE LAYOUT) ---
-        # Usando o layout 'default' que criamos, e não 'post'
+
+        # 3. Criar o "Front Matter" do Jekyll
+        # ==================================================
+        # A CORREÇÃO ESTÁ AQUI:
+        # Trocamos "layout: post" por "layout: default"
+        # ==================================================
         conteudo_front_matter = f"""---
 layout: default
 title: "{titulo_limpo}"
@@ -155,26 +161,19 @@ title: "{titulo_limpo}"
 """
         conteudo_completo = conteudo_front_matter + corpo
 
+        # 4. Salvar o Arquivo
         pasta_posts = "_posts"
         os.makedirs(pasta_posts, exist_ok=True)
-        
+
         caminho_arquivo = os.path.join(pasta_posts, nome_arquivo)
-        
-        # Verificação final para evitar sobrescrever acidentalmente
-        if os.path.exists(caminho_arquivo):
-            print(f"Erro: Arquivo '{caminho_arquivo}' já existe. Abortando.")
-            return False
 
         with open(caminho_arquivo, 'w', encoding='utf-8') as f:
             f.write(conteudo_completo)
-            
+
         print(f"--- SUCESSO: Post salvo em '{caminho_arquivo}' ---")
-        return True
 
     except Exception as e:
         print(f"Erro ao salvar o arquivo do post: {e}")
-        return False
-
 # --- ORQUESTRADOR PRINCIPAL (Atualizado) ---
 
 def executar_agente():
@@ -217,3 +216,4 @@ def executar_agente():
 # --- Ponto de Entrada do Script ---
 if __name__ == "__main__":
     executar_agente()
+
