@@ -1,0 +1,51 @@
+# Nome do fluxo de trabalho
+name: Agente de Conteudo (Rodar agente_v1.py)
+
+on:
+  # 1. Permite que você rode manualmente pela aba "Actions"
+  workflow_dispatch:
+  
+  # 2. O Agendador "Set-and-Forget" (Cron Job)
+  schedule:
+    # Roda todo dia às 08:00 UTC (05:00 da manhã no Brasil)
+    # Você pode ajustar o horário. Use https://crontab.guru para
+    # gerar um novo.
+    - cron: '0 8 * * *'
+
+jobs:
+  build-and-run-agent:
+    runs-on: ubuntu-latest # Roda em um servidor Linux padrão
+
+    steps:
+      # 1. Baixa o seu código (agente_v1.py, requirements.txt)
+      - name: 1. Checkout do Repositório
+        uses: actions/checkout@v4
+
+      # 2. Configura o ambiente Python
+      - name: 2. Configurar Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      # 3. Instala as "compras" (bibliotecas)
+      - name: 3. Instalar Dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 4. Executa o Agente!
+      - name: 4. Rodar o Agente de IA
+        env:
+          # Esta é a mágica: Injeta o "segredo" no ambiente
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          python agente_v1.py
+
+      # 5. Publica o novo arquivo .md
+      # Esta ação automaticamente faz um "commit" dos novos arquivos
+      # que o script (agente_v1.py) criou na pasta _posts
+      - name: 5. Fazer Commit do novo post
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "📰 Novo post (bot)"
+          file_pattern: "_posts/*.md" # Só faz commit de arquivos .md em _posts
