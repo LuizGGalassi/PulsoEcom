@@ -137,7 +137,7 @@ def salvar_post_jekyll(insight_completo: str):
         # 3. Criar o "Front Matter" do Jekyll
         # Este é o cabeçalho que o Jekyll usa para construir a página
         conteudo_front_matter = f"""---
-layout: post
+layout: default
 title: "{titulo_limpo}"
 ---
 
@@ -195,4 +195,5 @@ def executar_agente():
 
 # --- Ponto de Entrada do Script ---
 if __name__ == "__main__":
+
     executar_agente() # Esta deve ser a ÚLTIMA chamada no seu script
