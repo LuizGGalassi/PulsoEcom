@@ -1,74 +1,97 @@
 import google.generativeai as genai
-import feedparser # <-- Nossa nova biblioteca (Módulo 1)
+import feedparser
 import os
+import random # <-- NOVO: Para escolher fontes aleatórias
 from typing import Tuple, Union
-from datetime import datetime # Para pegar a data de hoje
+from datetime import datetime
 
 # --- CONFIGURAÇÃO (API KEY) ---
-# Pega a API Key do "cofre" do GitHub Actions (Environment Variable)
 API_KEY = os.environ.get("GOOGLE_API_KEY")
 
+# --- MUDANÇA (CORREÇÃO DE BUG CRÍTICO) ---
+# Se a chave não for encontrada, o script deve parar.
 if not API_KEY:
-    print("Erro: A API Key 'GOOGLE_API_KEY' não foi encontrada.") 
+    print("Erro Crítico: A API Key 'GOOGLE_API_KEY' não foi encontrada.")
+    exit(1) # Sai do script com um código de erro
+
 genai.configure(api_key=API_KEY)
 
 
-# --- MÓDULO 1: O MONITOR (Coleta de Dados) ---
+# --- MUDANÇA (MELHORIA DE CRESCIMENTO) ---
+# Damos ao agente múltiplas fontes para gerar variedade.
+FONTES_RSS = {
+    "r/shopify": "https://www.reddit.com/r/shopify/.rss",
+    "r/shopee": "https://www.reddit.com/r/shopee/.rss",
+    "e-commerce-times": "https://www.ecommercetimes.com/feed/"
+}
+# Arquivo de log para evitar posts duplicados
+LOG_POSTS_PROCESSADOS = "_data/posts_processados.log"
 
-def buscar_ultima_noticia() -> Tuple[Union[str, None], Union[str, None]]:
+
+# --- MÓDULO 1: O MONITOR (Atualizado) ---
+
+def buscar_post_aleatorio() -> Tuple[Union[str, None], Union[str, None], Union[str, None]]:
     """
-    Busca a notícia mais recente de uma fonte RSS (Shopify).
-    Retorna (titulo, resumo) ou (None, None) se falhar.
+    Busca um post novo de uma fonte aleatória que ainda não foi processado.
+    Retorna (titulo, resumo, link_id) ou (None, None, None).
     """
-    URL_RSS_REDDIT_SHOPIFY = "https://www.reddit.com/r/shopify/.rss"
     
-    # --- A CORREÇÃO: "Disfarce" de Navegador ---
-    # Este é um User-Agent comum de um navegador Chrome.
+    # Carrega o log de posts já processados
+    os.makedirs(os.path.dirname(LOG_POSTS_PROCESSADOS), exist_ok=True)
+    if not os.path.exists(LOG_POSTS_PROCESSADOS):
+        open(LOG_POSTS_PROCESSADOS, 'w').close()
+        
+    with open(LOG_POSTS_PROCESSADOS, 'r', encoding='utf-8') as f:
+        posts_ja_processados = f.read().splitlines()
+
     USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
     
-    print(f"Buscando dados em: {URL_RSS_REDDIT_SHOPIFY}")
+    # Pega uma fonte aleatória da nossa lista
+    nome_fonte, url_fonte = random.choice(list(FONTES_RSS.items()))
+    print(f"Buscando dados da fonte aleatória: {nome_fonte} ({url_fonte})")
     
     try:
-        # Passamos o 'agent' para o feedparser
-        feed = feedparser.parse(URL_RSS_REDDIT_SHOPIFY, agent=USER_AGENT)
+        feed = feedparser.parse(url_fonte, agent=USER_AGENT)
         
-        # --- VERIFICAÇÃO DE ROBUSTEZ ---
-        # 1. O feed.bozo é 1 (True) se o feedparser não conseguiu ler o RSS
         if feed.bozo:
-            print(f"Erro de parsing: O feed RSS está mal formatado ou inacessível.")
-            print(f"Causa: {feed.bozo_exception}")
-            return None, None
-
-        # 2. Verificamos se a lista de 'entries' NÃO está vazia
+            print(f"Erro de parsing no feed: {feed.bozo_exception}")
+            return None, None, None
+        
         if not feed.entries:
-            print("Erro: O feed foi lido, mas não contém nenhum post (entries).")
-            print("Isso pode ser um bloqueio do servidor ou o feed está vazio.")
-            return None, None
+            print("Erro: Feed lido, mas não contém posts.")
+            return None, None, None
             
-        # SÓ AGORA (após verificar) podemos acessar o [0] com segurança
-        post_mais_recente = feed.entries[0]
-        
-        titulo = post_mais_recente.title
-        resumo = post_mais_recente.get('summary', post_mais_recente.get('description', ''))
-        
-        if not titulo or not resumo:
-            print("Erro: Post do RSS veio sem título ou resumo.")
-            return None, None
+        # --- LÓGICA ANTI-DUPLICATA ---
+        # Em vez de pegar só o [0], procuramos o primeiro post NOVO
+        for post in feed.entries:
+            # 'id' ou 'link' são os melhores identificadores únicos
+            link_id = post.get('id', post.get('link', ''))
             
-        return titulo, resumo
+            if not link_id:
+                continue # Pula post se não tiver ID/link
+
+            if link_id not in posts_ja_processados:
+                # ENCONTRAMOS UM POST NOVO!
+                print(f"Post novo encontrado: {post.title[:50]}...")
+                titulo = post.title
+                resumo = post.get('summary', post.get('description', ''))
+                
+                return titulo, resumo, link_id # Retorna o ID para o log
+            
+        # Se o loop terminar, todos os posts do feed já foram processados
+        print("Nenhum post novo encontrado nesta fonte. Todos já estão no log.")
+        return None, None, None
 
     except Exception as e:
         print(f"Erro inesperado ao buscar dados do RSS: {e}")
-        return None, None
+        return None, None, None
 
 # --- MÓDULO 2: O CÉREBRO (Processamento IA) ---
-# (Esta é a sua função que já validamos)
-
+# (Sem mudanças. Esta função está perfeita.)
 def gerar_insight_acionavel(titulo_artigo: str, resumo_artigo: str) -> str:
     """
     Usa a IA para transformar dados brutos em um insight acionável.
     """
-    
     prompt_template = f"""
     Objetivo: Atue como um especialista em e-commerce focado em Shopify e Shopee.
     Sua tarefa é ler o material de origem e gerar um "insight acionável" para 
@@ -85,57 +108,45 @@ def gerar_insight_acionavel(titulo_artigo: str, resumo_artigo: str) -> str:
 
     Insight Gerado:
     """
-
     try:
-        # O modelo que descobrimos que funciona para você
         model = genai.GenerativeModel('models/gemini-2.5-flash') 
         response = model.generate_content(prompt_template)
-        
         insight_limpo = response.text.strip()
         return insight_limpo
-    
     except Exception as e:
         print(f"Erro ao chamar a API de IA: {e}")
         return None
 
-# --- MÓDULO 3: O PUBLICADOR (Salva o Post) ---
+# --- MÓDULO 3: O PUBLICADOR (Atualizado) ---
 
-def salvar_post_jekyll(insight_completo: str):
+def salvar_post_jekyll(insight_completo: str) -> bool: # Retorna True/False
     """
     Pega o insight gerado pela IA, formata-o como um post
     Jekyll e o salva como um arquivo .md.
     """
     print("Iniciando Módulo 3: Publicador Estático...")
-    
     try:
-        # 1. Separar o Título do Corpo
-        # O formato da IA é: **Título**\n\nCorpo...
         partes = insight_completo.split('\n\n', 1)
         if len(partes) < 2:
             print("Erro: Insight da IA não está no formato Título/Corpo esperado.")
-            return
+            return False
 
         titulo_raw = partes[0]
         corpo = partes[1].strip()
-        
-        # Limpa o título (remove os ** do Markdown)
         titulo_limpo = titulo_raw.replace("**", "").strip()
 
-        # 2. Preparar o Nome do Arquivo (Formato Jekyll)
-        # Formato: YYYY-MM-DD-titulo-do-post.md
-        
         hoje_str = datetime.now().strftime('%Y-%m-%d')
         
-        # Cria um "slug": "Meu Título" -> "meu-titulo"
-        # Esta é uma versão simples e "low-maintenance"
         slug = titulo_limpo.lower().replace(' ', '-')
-        # Remove caracteres problemáticos para nomes de arquivo
         slug = "".join(c for c in slug if c.isalnum() or c in ['-']) 
+        
+        # Garante que o slug não seja muito longo (bom para nomes de arquivo)
+        slug = slug[:60] 
         
         nome_arquivo = f"{hoje_str}-{slug}.md"
         
-        # 3. Criar o "Front Matter" do Jekyll
-        # Este é o cabeçalho que o Jekyll usa para construir a página
+        # --- MUDANÇA (CORREÇÃO DE LAYOUT) ---
+        # Usando o layout 'default' que criamos, e não 'post'
         conteudo_front_matter = f"""---
 layout: default
 title: "{titulo_limpo}"
@@ -144,32 +155,35 @@ title: "{titulo_limpo}"
 """
         conteudo_completo = conteudo_front_matter + corpo
 
-        # 4. Salvar o Arquivo
-        # Salva tudo na pasta '_posts' (o padrão do Jekyll)
         pasta_posts = "_posts"
-        os.makedirs(pasta_posts, exist_ok=True) # Cria a pasta se ela não existir
+        os.makedirs(pasta_posts, exist_ok=True)
         
         caminho_arquivo = os.path.join(pasta_posts, nome_arquivo)
         
+        # Verificação final para evitar sobrescrever acidentalmente
+        if os.path.exists(caminho_arquivo):
+            print(f"Erro: Arquivo '{caminho_arquivo}' já existe. Abortando.")
+            return False
+
         with open(caminho_arquivo, 'w', encoding='utf-8') as f:
             f.write(conteudo_completo)
             
         print(f"--- SUCESSO: Post salvo em '{caminho_arquivo}' ---")
+        return True
 
     except Exception as e:
         print(f"Erro ao salvar o arquivo do post: {e}")
+        return False
 
-# --- ORQUESTRADOR PRINCIPAL ---
-
-# ... (outras funções acima) ...
+# --- ORQUESTRADOR PRINCIPAL (Atualizado) ---
 
 def executar_agente():
-    print("--- INICIANDO AGENTE DE INTELIGÊNCIA V1 ---")
+    print("--- INICIANDO AGENTE DE INTELIGÊNCIA V2 ---")
     
     # 1. Módulo 1 executa
-    titulo, resumo = buscar_ultima_noticia()
+    titulo, resumo, link_id = buscar_post_aleatorio()
     
-    if titulo and resumo:
+    if titulo and resumo and link_id:
         print(f"\nDados Brutos Coletados:\n  Título: {titulo[:50]}...")
         print(f"  Resumo: {resumo[:70]}...")
         
@@ -181,19 +195,25 @@ def executar_agente():
             print("\n--- INSIGHT GERADO COM SUCESSO ---")
             print(insight)
             
-            # --- ESTE É O LUGAR CORRETO ---
-            # O 'insight' é passado como argumento
-            salvar_post_jekyll(insight) 
+            # 3. Módulo 3 executa
+            sucesso_ao_salvar = salvar_post_jekyll(insight)
             
+            # 4. MÓDULO ANTI-DUPLICATA (Final)
+            if sucesso_ao_salvar:
+                # Só registra no log se o arquivo foi salvo com sucesso
+                with open(LOG_POSTS_PROCESSADOS, 'a', encoding='utf-8') as f:
+                    f.write(f"{link_id}\n")
+                print(f"Registrado '{link_id}' no log de posts processados.")
+            else:
+                print("Falha ao salvar o post. Não será registrado no log.")
+                
         else:
             print("\nFalha ao gerar insight com os dados reais.")
     else:
-        print("Falha ao coletar dados reais. Abortando.")
+        print("Nenhum post novo para processar. Encerrando o ciclo.")
         
-    print("\n--- AGENTE FINALIZADO ---")
-
+    print("\n--- AGENTE V2 FINALIZADO ---")
 
 # --- Ponto de Entrada do Script ---
 if __name__ == "__main__":
-
-    executar_agente() # Esta deve ser a ÚLTIMA chamada no seu script
+    executar_agente()
