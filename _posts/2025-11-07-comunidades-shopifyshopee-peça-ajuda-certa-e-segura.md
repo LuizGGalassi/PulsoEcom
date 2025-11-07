@@ -1,5 +1,5 @@
 ---
-layout: post
+layout: default
 title: "Comunidades Shopify/Shopee: Peça Ajuda Certa e Segura!"
 ---
 
