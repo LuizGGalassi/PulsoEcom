@@ -16,6 +16,13 @@
       </header>
 
       <section>
+        {% if page.date %}
+          <header class="post-header">
+            <h2>{{ page.title }}</h2>
+            <p><small>Publicado em: {{ page.date | date: "%d/%m/%Y" }}</small></p>
+          </header>
+          <hr> 
+        {% endif %}
         {{ content }}
 
       </section>
